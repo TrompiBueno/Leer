@@ -1,0 +1,131 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lector de texto</title>
+</head>
+<body>
+
+<h3>Cámara</h3>
+
+<video id="video" autoplay playsinline></video>
+
+<br><br>
+
+<button id="foto">Hacer foto</button>
+
+<canvas id="canvas" hidden></canvas>
+
+<p id="estado"></p>
+
+<h3>Texto detectado</h3>
+
+<textarea id="texto" rows="15" cols="45" placeholder="El texto detectado aparecerá aquí"></textarea>
+
+<br><br>
+
+<button id="leer">Leer texto</button>
+<button id="parar">Parar lectura</button>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const estado = document.getElementById("estado");
+const texto = document.getElementById("texto");
+const botonFoto = document.getElementById("foto");
+
+async function iniciarCamara() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { ideal: "environment" }
+            },
+            audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+    } catch (error) {
+        estado.textContent =
+            "No se pudo activar la cámara. Permite el acceso y abre la página mediante HTTPS.";
+    }
+}
+
+botonFoto.addEventListener("click", async () => {
+    if (!video.videoWidth) {
+        estado.textContent = "La cámara todavía no está preparada.";
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const contexto = canvas.getContext("2d");
+    contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    estado.textContent = "Reconociendo todas las palabras...";
+    botonFoto.disabled = true;
+
+    try {
+        const resultado = await Tesseract.recognize(
+            canvas,
+            "spa+eng",
+            {
+                logger: info => {
+                    if (info.status === "recognizing text") {
+                        const porcentaje = Math.round(info.progress * 100);
+                        estado.textContent =
+                            "Reconociendo texto: " + porcentaje + "%";
+                    }
+                }
+            }
+        );
+
+        texto.value = resultado.data.text.trim();
+
+        if (texto.value) {
+            estado.textContent = "Texto reconocido. Puedes corregirlo si hace falta.";
+        } else {
+            estado.textContent =
+                "No se ha detectado texto. Prueba con más luz y enfoca la hoja.";
+        }
+
+    } catch (error) {
+        estado.textContent =
+            "Error al reconocer el texto. Comprueba tu conexión a Internet.";
+    }
+
+    botonFoto.disabled = false;
+});
+
+document.getElementById("leer").addEventListener("click", () => {
+    speechSynthesis.cancel();
+
+    const contenido = texto.value.trim();
+
+    if (!contenido) {
+        estado.textContent = "Primero haz una foto.";
+        return;
+    }
+
+    const lectura = new SpeechSynthesisUtterance(contenido);
+    lectura.lang = "es-ES";
+    lectura.rate = 1;
+
+    speechSynthesis.speak(lectura);
+});
+
+document.getElementById("parar").addEventListener("click", () => {
+    speechSynthesis.cancel();
+});
+
+iniciarCamara();
+</script>
+
+</body>
+</html>
